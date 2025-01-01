@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Audio Comparison Tool</title>
+  <script src="https://unpkg.com/wavesurfer.js"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(to bottom, #f0f8ff, #87cefa);
+      color: #333;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      font-size: 1.8em;
+      color: #004080;
+      margin: 20px 0;
+    }
+    .file-input {
+      margin: 10px 0;
+      width: 90%;
+      text-align: center;
+    }
+    .controls {
+      margin: 20px 0;
+      display: flex;
+      justify-content: space-evenly;
+      width: 90%;
+    }
+    .controls button {
+      background-color: #004080;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 10px 20px;
+      font-size: 0.9em;
+      cursor: pointer;
+    }
+    .controls button:hover {
+      background-color: #0059b3;
+    }
+    .waveform-container {
+      width: 90%;
+      margin: 20px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .waveform {
+      height: 100px;
+      width: 100%;
+      margin: 10px 0;
+    }
+    .difference {
+      height: 25px;
+      width: 100%;
+      background: linear-gradient(to right, #ff9999, #9999ff);
+      border-radius: 5px;
+      opacity: 0.7;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Audio Comparison Tool</h1>
+
+  <div class="file-input">
+    <input type="file" id="audio1" accept="audio/*" style="margin-bottom: 10px;">
+    <button id="recordButton" style="margin-top: 10px;">Record Audio 2</button>
+    <button id="stopButton" style="display: none;">Stop Recording</button>
+  </div>
+
+  <div class="controls">
+    <button id="play1">Play Audio 1</button>
+    <button id="pause1">Pause Audio 1</button>
+    <button id="play2">Play Audio 2</button>
+    <button id="pause2">Pause Audio 2</button>
+  </div>
+
+  <div class="waveform-container">
+    <div id="waveform1" class="waveform"></div>
+    <div id="waveform2" class="waveform"></div>
+    <div class="difference" id="difference-visual"></div>
+  </div>
+
+  <script>
+    let wave1, wave2;
+    let mediaRecorder, recordedChunks = [];
+
+    // Initialize waveforms
+    function initWaveform(waveformId) {
+      return WaveSurfer.create({
+        container: waveformId,
+        waveColor: '#87ceeb',
+        progressColor: '#004080',
+        height: 100,
+        normalize: true
+      });
+    }
+
+    wave1 = initWaveform('#waveform1');
+    wave2 = initWaveform('#waveform2');
+
+    // File upload events
+    document.getElementById('audio1').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        wave1.load(URL.createObjectURL(file));
+      }
+    });
+
+    // Recording functionality
+    const recordButton = document.getElementById('recordButton');
+    const stopButton = document.getElementById('stopButton');
+
+    recordButton.addEventListener('click', async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Your browser does not support audio recording.');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+
+        recordedChunks = [];
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            recordedChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          wave2.load(audioUrl);
+        };
+
+        mediaRecorder.start();
+        recordButton.style.display = 'none';
+        stopButton.style.display = 'inline-block';
+      } catch (err) {
+        console.error('Error accessing microphone:', err);
+        alert('Failed to access microphone.');
+      }
+    });
+
+    stopButton.addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        recordButton.style.display = 'inline-block';
+        stopButton.style.display = 'none';
+      }
+    });
+
+    // Play and pause controls
+    document.getElementById('play1').addEventListener('click', () => {
+      wave1.play();
+    });
+
+    document.getElementById('pause1').addEventListener('click', () => {
+      wave1.pause();
+    });
+
+    document.getElementById('play2').addEventListener('click', () => {
+      wave2.play();
+    });
+
+    document.getElementById('pause2').addEventListener('click', () => {
+      wave2.pause();
+    });
+
+    // Visual difference indicator
+    const diffVisual = document.getElementById('difference-visual');
+    wave1.on('audioprocess', () => {
+      updateDifferenceVisual();
+    });
+    wave2.on('audioprocess', () => {
+      updateDifferenceVisual();
+    });
+
+    function updateDifferenceVisual() {
+      if (wave1.getCurrentTime() && wave2.getCurrentTime()) {
+        const diff = Math.abs(wave1.getCurrentTime() - wave2.getCurrentTime());
+        diffVisual.style.width = `${Math.min(100, diff * 10)}%`;
+        diffVisual.style.backgroundColor = diff < 0.5 ? '#99ff99' : '#ff9999';
+      }
+    }
+  </script>
+</body>
+</html>
